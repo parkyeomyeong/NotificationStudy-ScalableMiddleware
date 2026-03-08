@@ -4,6 +4,7 @@ import com.ym.noti.command.data.NotificationRepository;
 import com.ym.noti.command.domain.NotificationRequest;
 import com.ym.noti.command.domain.NotificationStatus;
 import com.ym.noti.command.dto.NotiCommandRequest;
+import com.ym.noti.command.domain.SendResult;
 import com.ym.noti.command.router.NotiSenderRouter;
 import com.ym.noti.command.router.sender.NotiSender;
 import org.junit.jupiter.api.DisplayName;
@@ -57,8 +58,14 @@ class NotificationQueueConsumerTest {
             return;
 
         try {
-            boolean result = router.getNotiSender(noti.getChannel()).send(noti);
-            noti.setStatus(result ? NotificationStatus.SUCCESS : NotificationStatus.FAILED);
+            SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+            if (result == SendResult.SUCCESS) {
+                noti.setStatus(NotificationStatus.SUCCESS);
+            } else if (result == SendResult.FAILURE) {
+                noti.setStatus(NotificationStatus.PERMANENT_FAILED);
+            } else { // ERROR
+                noti.setStatus(NotificationStatus.FAILED);
+            }
         } catch (Exception e) {
             noti.setStatus(NotificationStatus.FAILED);
         }

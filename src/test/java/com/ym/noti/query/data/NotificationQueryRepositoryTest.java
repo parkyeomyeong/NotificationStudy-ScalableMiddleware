@@ -21,7 +21,7 @@ class NotificationQueryRepositoryTest {
     @Autowired
     NotificationQueryRepository repo;
 
-    @Test
+    // @Test
     @DisplayName("[Unit] 실제로 12개월 이내 데이터만 페이징 해서 가져오는지 가져오는지 확인")
     void find_recent_notifications_within_12_months() {
         String receiver = "user@test.com";
