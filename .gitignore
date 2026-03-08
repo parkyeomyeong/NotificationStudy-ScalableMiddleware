@@ -5,7 +5,9 @@ README.md
 
 .gradle
 build/
-#jar파일은 제출해야하니까 예외 안되게 올리기~ -> 릴리즈에 올리기
+
+k6/results/*
+# build/libs
 #!build/libs/
 #!build/libs/*.jar
 

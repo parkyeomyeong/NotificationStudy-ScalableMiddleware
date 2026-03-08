@@ -10,7 +10,7 @@ let counter = 0;
 export function makePayload() {
   counter++;
   return JSON.stringify({
-    channel: 'EXTERNAL',
+    channel: 'teams',
     receiver: `user_${counter}`,
     title: `부하테스트 알림 ${counter}`,
     content: `테스트 내용 ${counter}`,
