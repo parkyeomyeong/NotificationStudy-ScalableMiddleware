@@ -1,6 +1,7 @@
 package com.ym.noti.command.router.sender;
 
 import com.ym.noti.command.domain.NotificationRequest;
+import com.ym.noti.command.domain.SendResult;
 import com.ym.noti.command.router.ExternalNotiConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
@@ -24,7 +25,7 @@ public class EmailNotiSender implements NotiSender {
     }
 
     @Override
-    public Boolean send(NotificationRequest request) {
+    public SendResult send(NotificationRequest request) {
         String url = ExternalNotiConfig.BASE_URL + "api/v1/notification/email";
 
         HttpHeaders headers = new HttpHeaders();
@@ -39,9 +40,16 @@ public class EmailNotiSender implements NotiSender {
 
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, requestBody, Map.class);
-            return "SUCCESS".equals(response.getBody().get("resultCode"));
+            String status = (String) response.getBody().get("status");
+            if ("SUCCESS".equals(status)) {
+                return SendResult.SUCCESS;
+            } else {
+                return SendResult.FAILURE;
+            }
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            return SendResult.ERROR;
         } catch (Exception e) {
-            return false;
+            return SendResult.ERROR;
         }
     }
 

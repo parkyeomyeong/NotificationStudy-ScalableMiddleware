@@ -3,6 +3,7 @@ package com.ym.noti.command.service;
 import com.ym.noti.command.data.NotificationRepository;
 import com.ym.noti.command.domain.NotificationRequest;
 import com.ym.noti.command.domain.NotificationStatus;
+import com.ym.noti.command.domain.SendResult;
 import com.ym.noti.command.dto.NotiCommandRequest;
 import com.ym.noti.command.router.NotiSenderRouter;
 import jakarta.annotation.PostConstruct;
@@ -52,8 +53,8 @@ public class NotificationQueueConsumer {
 
                 try {
                     log.warn("MAIN QUEUE SIZE: {}", mainQueue.size());
-                    boolean result = router.getNotiSender(noti.getChannel()).send(noti);
-                    noti.setStatus(result ? NotificationStatus.SUCCESS : NotificationStatus.FAILED);
+                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                    handleSendResult(noti, result, false);
                 } catch (Exception e) {
                     noti.setStatus(NotificationStatus.FAILED);
                     log.error("MAIN QUEUE ERROR", e);
@@ -77,8 +78,8 @@ public class NotificationQueueConsumer {
 
                 try {
                     log.warn("RESERVED QUEUE SIZE: {}", reservedQueue.size());
-                    boolean result = router.getNotiSender(noti.getChannel()).send(noti);
-                    noti.setStatus(result ? NotificationStatus.SUCCESS : NotificationStatus.FAILED);
+                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                    handleSendResult(noti, result, false);
                 } catch (Exception e) {
                     noti.setStatus(NotificationStatus.FAILED);
                     log.error("RESERVED QUEUE ERROR", e);
@@ -102,14 +103,8 @@ public class NotificationQueueConsumer {
 
                 try {
                     log.warn("FAIL QUEUE SIZE: {}", failedQueue.size());
-                    boolean result = router.getNotiSender(noti.getChannel()).send(noti);
-                    if (result) {
-                        noti.setStatus(NotificationStatus.SUCCESS);
-                    } else {
-                        // 3번 시도했는데 모두 실패면 영구 실패로 저장
-                        noti.setStatus(noti.getTryCount() + 1 >= 3 ? NotificationStatus.PERMANENT_FAILED
-                                : NotificationStatus.FAILED);
-                    }
+                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                    handleSendResult(noti, result, true);
                 } catch (Exception e) {
                     noti.setStatus(NotificationStatus.FAILED);
                     log.error("FAIL QUEUE ERROR", e);
@@ -121,4 +116,18 @@ public class NotificationQueueConsumer {
         });
     }
 
+    private void handleSendResult(NotificationRequest noti, SendResult result, boolean isFailedQueue) {
+        if (result == SendResult.SUCCESS) {
+            noti.setStatus(NotificationStatus.SUCCESS);
+        } else if (result == SendResult.FAILURE) {
+            noti.setStatus(NotificationStatus.PERMANENT_FAILED);
+        } else { // ERROR
+            if (isFailedQueue) {
+                noti.setStatus(
+                        noti.getTryCount() + 1 >= 3 ? NotificationStatus.PERMANENT_FAILED : NotificationStatus.FAILED);
+            } else {
+                noti.setStatus(NotificationStatus.FAILED);
+            }
+        }
+    }
 }
