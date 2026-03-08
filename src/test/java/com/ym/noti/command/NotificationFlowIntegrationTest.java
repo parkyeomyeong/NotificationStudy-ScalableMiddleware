@@ -36,7 +36,7 @@ class NotificationFlowIntegrationTest {
 
     @Qualifier("mainNotiQueue")
     @Autowired
-    BlockingQueue<NotiCommandRequest> queue;
+    BlockingQueue<Long> queue;
 
     @Test
     @DisplayName("[번외] 발솔서버는 알람처리를 단일 쓰레드로만 처리하는지 병렬로 하는지 확인1")
@@ -44,8 +44,8 @@ class NotificationFlowIntegrationTest {
         ExecutorService executor = Executors.newFixedThreadPool(5);
         List<Future<Long>> futures = new ArrayList<>();
 
-        for(int i = 0 ; i < 5 ; i++) {
-            NotiCommandRequest request = new NotiCommandRequest();
+        for (int i = 0; i < 5; i++) {
+            NotificationRequest request = new NotificationRequest();
             request.setChannel("EXTERNAL");
             request.setReceiver("Test user");
             request.setTitle("Test title");
@@ -94,14 +94,14 @@ class NotificationFlowIntegrationTest {
         requests.add(request2);
         requests.add(request3);
 
-        for(int i = 0 ; i < 3 ; i++) {
+        for (int i = 0; i < 3; i++) {
             final int index = i;
             Executors.newSingleThreadExecutor().submit(() -> {
                 NotificationRequest noti = requests.get(index);
 
                 try {
                     System.out.println("보냈나?");
-                    boolean result = router.getNotiSender(noti.getChannel()).send(new NotiCommandRequest(noti));
+                    boolean result = router.getNotiSender(noti.getChannel()).send(noti);
                     noti.setStatus(result ? NotificationStatus.SUCCESS : NotificationStatus.FAILED);
                     System.out.println(index + "번째 쓰레드 완료 : " + noti.getStatus());
                 } catch (Exception e) {
@@ -110,7 +110,7 @@ class NotificationFlowIntegrationTest {
                 }
                 noti.setLastTriedAt(LocalDateTime.now());
                 noti.setTryCount(noti.getTryCount() + 1);
-                //repo.save(noti);
+                // repo.save(noti);
             });
         }
         latch.await(); // 모든 작업이 끝날 때까지 대기
@@ -127,7 +127,7 @@ class NotificationFlowIntegrationTest {
         dto.setReservedAt(LocalDateTime.now());
 
         // when: 등록 API 호출
-        service.registerNotification(dto);
+        service.register(dto);
 
         // then: 저장된 상태가 PENDING인지 확인
         List<NotificationRequest> all = repo.findAll();
@@ -145,13 +145,14 @@ class NotificationFlowIntegrationTest {
         dto.setReceiver("test receiver");
         dto.setReservedAt(LocalDateTime.now());
 
-        service.registerNotification(dto);
+        service.register(dto);
 
         // when: 스케줄러 실행
         scheduler.refillMainQueueFromDb();
 
-//        System.out.println("📦 scheduler 큐: " + System.identityHashCode(scheduler.getQueue()));
-//        System.out.println("📦 test 주입 큐: " + System.identityHashCode(this.queue));
+        // System.out.println("📦 scheduler 큐: " +
+        // System.identityHashCode(scheduler.getQueue()));
+        // System.out.println("📦 test 주입 큐: " + System.identityHashCode(this.queue));
 
         // then: 큐에 데이터가 들어갔는지 확인
         assertThat(queue.size()).isGreaterThan(0);

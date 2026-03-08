@@ -35,7 +35,7 @@ class NotificationQueueConsumerTest {
     @Mock
     NotiSender mockSender;
     @Mock
-    BlockingQueue<NotiCommandRequest> queue;
+    BlockingQueue<Long> queue;
     // 테스트 대상 클래스에 Mock 주입
     @InjectMocks
     NotificationQueueConsumer consumer;
@@ -46,26 +46,18 @@ class NotificationQueueConsumerTest {
         // given: 알림 요청 생성
         NotificationRequest entity = new NotificationRequest();
         entity.setId(1L);
-//        entity.setChannel("EXTERNAL");
+        // entity.setChannel("EXTERNAL");
         entity.setStatus(NotificationStatus.PENDING);
         entity.setCreatedAt(LocalDateTime.now());
 
-        NotiCommandRequest NotiTask = new NotiCommandRequest(entity);
-
-        // when: 큐에서 꺼낸 데이터에 대해 발송 성공 시나리오 설정
-        //given(queue.take()).willReturn(NotiTask);
-        given(repo.findById(1L)).willReturn(Optional.of(entity));
-        given(router.getNotiSender(any())).willReturn(mockSender);
-        given(mockSender.send(any())).willReturn(true);
-
-//        given(router.getNotiSender(any()).send(any())).willReturn(true);
-
         // 컨수머에서 수행되는 실제 로직 start
-        NotificationRequest noti = repo.findById(NotiTask.getId()).orElse(null);
-        if (noti == null) return;
+        Long notiId = entity.getId();
+        NotificationRequest noti = repo.findById(notiId).orElse(null);
+        if (noti == null)
+            return;
 
         try {
-            boolean result = router.getNotiSender(NotiTask.getChannel()).send(NotiTask);
+            boolean result = router.getNotiSender(noti.getChannel()).send(noti);
             noti.setStatus(result ? NotificationStatus.SUCCESS : NotificationStatus.FAILED);
         } catch (Exception e) {
             noti.setStatus(NotificationStatus.FAILED);

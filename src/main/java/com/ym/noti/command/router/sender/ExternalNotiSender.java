@@ -1,6 +1,6 @@
 package com.ym.noti.command.router.sender;
 
-import com.ym.noti.command.dto.NotiCommandRequest;
+import com.ym.noti.command.domain.NotificationRequest;
 import com.ym.noti.command.router.ExternalNotiConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
@@ -24,7 +24,7 @@ public class ExternalNotiSender implements NotiSender {
     }
 
     @Override
-    public Boolean send(NotiCommandRequest request) {
+    public Boolean send(NotificationRequest request) {
         // Mock API 로 보낼 주소
         String url = ExternalNotiConfig.BASE_URL + "/mock/send";
 

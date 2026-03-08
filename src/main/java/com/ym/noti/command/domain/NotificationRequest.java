@@ -2,11 +2,14 @@ package com.ym.noti.command.domain;
 
 import com.ym.noti.command.dto.NotiCommandRequest;
 import jakarta.persistence.*;
-import lombok.Data;
-
+import lombok.Setter;
+import lombok.Getter;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
+@EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "notification_request", indexes = {
         @Index(name = "idx_status_createdAt", columnList = "status, createdAt"), // 조회 + 정렬을 위해 복합 인덱스로 성능 올리기

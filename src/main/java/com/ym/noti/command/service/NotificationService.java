@@ -20,29 +20,21 @@ public class NotificationService {
     private final NotificationRepository repo;
 
     @Transactional // 하나의 단위에 insert, update가 있기 때문에 같은 영속성 공유를 위해 어노테이션
-    public void registerNotification(NotiCommandRequest request) {
+    public void register(NotiCommandRequest request) {
         // 인자값 유효성 검사
         if (!router.hasChannel(request.getChannel())) {
             throw new IllegalArgumentException("지원하지 않는 채널입니다: " + request.getChannel());
         }
         // 받은 요청은 일단 DB로 저장
         NotificationRequest noti = new NotificationRequest(request);
-        noti.setStatus(NotificationStatus.PENDING);
-        noti.setCreatedAt(LocalDateTime.now());
 
-        repo.save(noti); // DB에 먼저 저장 (id 없으면 Insert)
-    }
-
-    public void registerReservedNotification(NotiCommandRequest request) {
-        // 인자값 유효성 검사
-        if (!router.hasChannel(request.getChannel())) {
-            throw new IllegalArgumentException("지원하지 않는 채널입니다: " + request.getChannel());
+        if (request.getReservedAt() == null) {
+            noti.setStatus(NotificationStatus.PENDING);
+        } else {
+            noti.setStatus(NotificationStatus.RESERVED);
         }
-        // 받은 요청은 일단 DB로 저장
-        NotificationRequest noti = new NotificationRequest(request);
-        noti.setStatus(NotificationStatus.RESERVED);
-        noti.setCreatedAt(LocalDateTime.now());
 
+        noti.setCreatedAt(LocalDateTime.now());
         repo.save(noti); // DB에 먼저 저장 (id 없으면 Insert)
     }
 

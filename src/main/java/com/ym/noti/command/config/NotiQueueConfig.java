@@ -9,18 +9,20 @@ import java.util.concurrent.BlockingQueue;
 
 @Configuration
 public class NotiQueueConfig {
-    @Bean(name="mainNotiQueue")
-    public BlockingQueue<NotiCommandRequest> mainNotiQueue() {
+    @Bean(name = "mainNotiQueue")
+    public BlockingQueue<Long> mainNotiQueue() {
         // 요청들을 밸런스있게 발송서버에 전달하기 위해선 큐가 넘치면 안되기 때문에 제한
         return new ArrayBlockingQueue<>(1000);
     }
-    @Bean(name="reservedNotiQueue")
-    public BlockingQueue<NotiCommandRequest> reservedNotiQueue() {
+
+    @Bean(name = "reservedNotiQueue")
+    public BlockingQueue<Long> reservedNotiQueue() {
         // 요청들을 밸런스있게 발송서버에 전달하기 위해선 큐가 넘치면 안되기 때문에 제한
         return new ArrayBlockingQueue<>(1000);
     }
-    @Bean(name="failedNotiQueue")
-    public BlockingQueue<NotiCommandRequest> failedNotiQueue() {
+
+    @Bean(name = "failedNotiQueue")
+    public BlockingQueue<Long> failedNotiQueue() {
         // 요청들을 밸런스있게 발송서버에 전달하기 위해선 큐가 넘치면 안되기 때문에 제한
         return new ArrayBlockingQueue<>(500);
     }

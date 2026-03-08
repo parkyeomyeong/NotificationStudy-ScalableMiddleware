@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
+import com.ym.noti.query.dto.NotificationHistoryResponse;
 import java.time.LocalDateTime;
 
 @Tag(name = "Notification", description = "알림 조회 API")
@@ -26,7 +27,7 @@ public class NotiQueryController {
 
     @Operation(summary = "알림 성공목록 조회", description = "최대 N개월 안에 발송 성공한 알림")
     @GetMapping("/history")
-    public Page<NotificationRequest> getHistory(
+    public Page<NotificationHistoryResponse> getHistory(
             @RequestParam String receiver,
             @RequestParam(defaultValue = "1") int month,
             @RequestParam(defaultValue = "0") int page,
@@ -35,7 +36,9 @@ public class NotiQueryController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         LocalDateTime NMonthsAgo = LocalDateTime.now().minusMonths(month);
 
-        return notificationQueryRepository.findByReceiverAndCreatedAtGreaterThanEqual(receiver, NMonthsAgo, pageable);
+        Page<NotificationRequest> result = notificationQueryRepository
+                .findByReceiverAndCreatedAtGreaterThanEqual(receiver, NMonthsAgo, pageable);
+        return result.map(NotificationHistoryResponse::new);
     }
 
 }

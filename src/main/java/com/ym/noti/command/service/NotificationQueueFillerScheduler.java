@@ -19,16 +19,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 public class NotificationQueueFillerScheduler {
 
-    private final BlockingQueue<NotiCommandRequest> mainQueue;
-    private final BlockingQueue<NotiCommandRequest> reservedQueue;
-    private final BlockingQueue<NotiCommandRequest> failedQueue;
+    private final BlockingQueue<Long> mainQueue;
+    private final BlockingQueue<Long> reservedQueue;
+    private final BlockingQueue<Long> failedQueue;
     private final NotificationRepository repo;
 
     @Autowired
     public NotificationQueueFillerScheduler(
-            @Qualifier("mainNotiQueue") BlockingQueue<NotiCommandRequest> mainQueue,
-            @Qualifier("reservedNotiQueue") BlockingQueue<NotiCommandRequest> reservedQueue,
-            @Qualifier("failedNotiQueue") BlockingQueue<NotiCommandRequest> failedQueue,
+            @Qualifier("mainNotiQueue") BlockingQueue<Long> mainQueue,
+            @Qualifier("reservedNotiQueue") BlockingQueue<Long> reservedQueue,
+            @Qualifier("failedNotiQueue") BlockingQueue<Long> failedQueue,
             NotificationRepository repo) {
         this.mainQueue = mainQueue;
         this.reservedQueue = reservedQueue;
@@ -65,8 +65,7 @@ public class NotificationQueueFillerScheduler {
                         cursor);
                 // 벌크 처리를 하면 데이터 정확성과 장애 대비가 어려워 건 by 건으로 데이터 update
                 for (NotificationRequest notiEntity : candidates) {
-                    NotiCommandRequest notiTask = new NotiCommandRequest(notiEntity);
-                    if (mainQueue.offer(notiTask)) {
+                    if (mainQueue.offer(notiEntity.getId())) {
                         cursor = notiEntity.getCreatedAt(); // 커서 업데이트 (일단 큐에 들어가면 해당시간으로 커서 변경!!!!!!!!!!)
                         notiEntity.setStatus(NotificationStatus.QUEUED);
                         repo.save(notiEntity);
@@ -95,8 +94,7 @@ public class NotificationQueueFillerScheduler {
                                 LocalDateTime.now());
 
                 for (NotificationRequest notiEntity : candidates) {
-                    NotiCommandRequest notiTask = new NotiCommandRequest(notiEntity);
-                    if (reservedQueue.offer(notiTask)) {
+                    if (reservedQueue.offer(notiEntity.getId())) {
                         notiEntity.setStatus(NotificationStatus.QUEUED);
                         repo.save(notiEntity);
                     } else
@@ -128,8 +126,7 @@ public class NotificationQueueFillerScheduler {
                     // noti.getLastTriedAt().isAfter(LocalDateTime.now().minusSeconds(60)))
                     // continue;
 
-                    NotiCommandRequest notiTask = new NotiCommandRequest(notiEntity);
-                    if (failedQueue.offer(notiTask)) {
+                    if (failedQueue.offer(notiEntity.getId())) {
                         notiEntity.setStatus(NotificationStatus.QUEUED);
                         repo.save(notiEntity);
                     } else

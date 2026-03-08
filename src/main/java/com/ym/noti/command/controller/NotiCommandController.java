@@ -22,17 +22,11 @@ public class NotiCommandController {
 
     @Operation(summary = "알림 발송 등록", description = "채널에 따라 즉시/예약 발송을 등록")
     @PostMapping("/regist")
-    public ResponseEntity<NotiCommandResponse> register(@RequestBody NotiCommandRequest request){
+    public ResponseEntity<NotiCommandResponse> register(@RequestBody NotiCommandRequest request) {
         // 발송 처리 로직 (예: 외부 API 호출 등)
-        if(request.getReservedAt() == null){
-            notificationService.registerNotification(request);
-        }else{
-            notificationService.registerReservedNotification(request);
-        }
-
+        notificationService.register(request);
 
         return ResponseEntity.ok(new NotiCommandResponse("SUCCESS"));
     }
-
 
 }
