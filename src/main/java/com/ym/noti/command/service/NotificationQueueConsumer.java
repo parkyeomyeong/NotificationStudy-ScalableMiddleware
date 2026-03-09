@@ -40,80 +40,86 @@ public class NotificationQueueConsumer {
         this.router = router;
     }
 
-    // 메인 큐에서 메시지를 보내는 컨수머 : Bean으로 등록 하고 바로 실행되는 메소드 하나의 쓰레드 점유
+    // mock 서버 최대 동시 처리 200 기준으로 스레드 배분
+    // 총 유입량 비율: Main(N) : Failed(13N/27) = 27:13
+    // Main 120 / Reserved 20 / Failed 60 = 200
+    private static final int MAIN_THREAD_COUNT     = 120;
+    private static final int RESERVED_THREAD_COUNT =  20;
+    private static final int FAILED_THREAD_COUNT   =  60;
+
     @PostConstruct
     public void startMainQueueConsumerThread() {
-        Executors.newSingleThreadExecutor().submit(() -> {
-            while (true) {
-                Long notiId = mainQueue.take(); // 메시지 들어올 떄 까지 대기
-
-                NotificationRequest noti = repo.findById(notiId).orElse(null);
-                if (noti == null)
-                    continue;
-
-                try {
-                    log.warn("MAIN QUEUE SIZE: {}", mainQueue.size());
-                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
-                    handleSendResult(noti, result, false);
-                } catch (Exception e) {
-                    noti.setStatus(NotificationStatus.FAILED);
-                    log.error("MAIN QUEUE ERROR", e);
+        var executor = Executors.newFixedThreadPool(MAIN_THREAD_COUNT);
+        for (int i = 0; i < MAIN_THREAD_COUNT; i++) {
+            executor.submit(() -> {
+                while (true) {
+                    Long notiId = mainQueue.take();
+                    NotificationRequest noti = repo.findById(notiId).orElse(null);
+                    if (noti == null) continue;
+                    try {
+                        log.warn("MAIN QUEUE SIZE: {}", mainQueue.size());
+                        SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                        handleSendResult(noti, result, false);
+                    } catch (Exception e) {
+                        noti.setStatus(NotificationStatus.FAILED);
+                        log.error("MAIN QUEUE ERROR", e);
+                    }
+                    noti.setLastTriedAt(LocalDateTime.now());
+                    noti.setTryCount(noti.getTryCount() + 1);
+                    repo.save(noti);
                 }
-                noti.setLastTriedAt(LocalDateTime.now());
-                noti.setTryCount(noti.getTryCount() + 1);
-                repo.save(noti);
-            }
-        });
+            });
+        }
     }
 
-    // 예약 큐에서 메시지를 보내는 컨수머 : Bean으로 등록 하고 바로 실행되는 메소드 하나의 쓰레드 점유(예약시간대로 )
     @PostConstruct
     public void startReservedQueueConsumerThread() {
-        Executors.newSingleThreadExecutor().submit(() -> {
-            while (true) {
-                Long notiId = reservedQueue.take(); // 메시지 들어올 떄 까지 대기
-                NotificationRequest noti = repo.findById(notiId).orElse(null);
-                if (noti == null)
-                    continue;
-
-                try {
-                    log.warn("RESERVED QUEUE SIZE: {}", reservedQueue.size());
-                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
-                    handleSendResult(noti, result, false);
-                } catch (Exception e) {
-                    noti.setStatus(NotificationStatus.FAILED);
-                    log.error("RESERVED QUEUE ERROR", e);
+        var executor = Executors.newFixedThreadPool(RESERVED_THREAD_COUNT);
+        for (int i = 0; i < RESERVED_THREAD_COUNT; i++) {
+            executor.submit(() -> {
+                while (true) {
+                    Long notiId = reservedQueue.take();
+                    NotificationRequest noti = repo.findById(notiId).orElse(null);
+                    if (noti == null) continue;
+                    try {
+                        log.warn("RESERVED QUEUE SIZE: {}", reservedQueue.size());
+                        SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                        handleSendResult(noti, result, false);
+                    } catch (Exception e) {
+                        noti.setStatus(NotificationStatus.FAILED);
+                        log.error("RESERVED QUEUE ERROR", e);
+                    }
+                    noti.setLastTriedAt(LocalDateTime.now());
+                    noti.setTryCount(noti.getTryCount() + 1);
+                    repo.save(noti);
                 }
-                noti.setLastTriedAt(LocalDateTime.now());
-                noti.setTryCount(noti.getTryCount() + 1);
-                repo.save(noti);
-            }
-        });
+            });
+        }
     }
 
-    // 실패 큐에서 메시지를 보내는 컨수머 : Bean으로 등록 하고 바로 실행되는 메소드 하나의 쓰레드 점유
     @PostConstruct
     public void startFailedQueueConsumerThread() {
-        Executors.newSingleThreadExecutor().submit(() -> {
-            while (true) {
-                Long notiId = failedQueue.take(); // 메시지 들어올 떄 까지 대기
-                NotificationRequest noti = repo.findById(notiId).orElse(null);
-                if (noti == null)
-                    continue;
-
-                try {
-                    log.warn("FAIL QUEUE SIZE: {}", failedQueue.size());
-                    SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
-                    handleSendResult(noti, result, true);
-                } catch (Exception e) {
-                    noti.setStatus(NotificationStatus.FAILED);
-                    log.error("FAIL QUEUE ERROR", e);
+        var executor = Executors.newFixedThreadPool(FAILED_THREAD_COUNT);
+        for (int i = 0; i < FAILED_THREAD_COUNT; i++) {
+            executor.submit(() -> {
+                while (true) {
+                    Long notiId = failedQueue.take();
+                    NotificationRequest noti = repo.findById(notiId).orElse(null);
+                    if (noti == null) continue;
+                    try {
+                        log.warn("FAIL QUEUE SIZE: {}", failedQueue.size());
+                        SendResult result = router.getNotiSender(noti.getChannel()).send(noti);
+                        handleSendResult(noti, result, true);
+                    } catch (Exception e) {
+                        noti.setStatus(NotificationStatus.FAILED);
+                        log.error("FAIL QUEUE ERROR", e);
+                    }
+                    noti.setTryCount(noti.getTryCount() + 1);
+                    noti.setLastTriedAt(LocalDateTime.now());
+                    repo.save(noti);
                 }
-                noti.setTryCount(noti.getTryCount() + 1);
-                noti.setLastTriedAt(LocalDateTime.now());
-                repo.save(noti);
-            }
-        });
+            });
+        }
     }
 
     private void handleSendResult(NotificationRequest noti, SendResult result, boolean isFailedQueue) {
