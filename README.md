@@ -426,7 +426,7 @@ http://localhost:8080/swagger-ui/index.html
 # H2 Console (DB 직접 확인)
 http://localhost:8080/h2-console
 JDBC URL : jdbc:h2:mem:testdb
-ID       : kabank
+ID       : sa
 Password : (빈값)
 ```
 
