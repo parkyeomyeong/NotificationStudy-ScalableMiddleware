@@ -15,18 +15,18 @@ const successRate = new Rate('api_success_rate');   // API 등록 성공률
 const apiLatency  = new Trend('api_latency_ms', true);
 
 // ── 테스트 옵션 ────────────────────────────────────
+// 총 15,000건 고정 전송 - Test 2/3과 동일한 부하로 처리량 비교
+// Test 2 (200 스레드) 기준 5분 안에 소화 가능한 양
 export const options = {
-  // [Phase 1] 점진적 부하 증가 → API가 어느 VU까지 버티는지 확인
-  stages: [
-    { duration: '30s', target: 10  }, // 워밍업
-    { duration: '30s', target: 50  }, // 증가
-    { duration: '30s', target: 100 }, // 중부하
-    { duration: '30s', target: 200 }, // 한계치 (이미 확인된 max)
-    { duration: '30s', target: 200 }, // 한계치 유지
-    { duration: '30s', target: 0   }, // 쿨다운
-  ],
+  scenarios: {
+    fixed_load: {
+      executor: 'shared-iterations',
+      vus: 100,
+      iterations: 15000,
+      maxDuration: '3m',
+    },
+  },
   thresholds: {
-    // 기준선 기록용 - 실패 기준이 아닌 현재 수치 측정이 목적
     http_req_duration: ['p(95)<3000'],
     api_success_rate: ['rate>0.5'],
   },
