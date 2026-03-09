@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+
 @Service
 public class NotificationQueueFillerScheduler {
 
@@ -40,6 +43,18 @@ public class NotificationQueueFillerScheduler {
     private final AtomicBoolean isMainSchRunning = new AtomicBoolean(false);
     private final AtomicBoolean isReservedSchRunning = new AtomicBoolean(false);
     private final AtomicBoolean isFailedSchRunning = new AtomicBoolean(false);
+
+    /**
+     * 서버 재시작 시점에 기존 QUEUED 상태로 멈춰버린 알림들을 PENDING으로 복구하여
+     * 다시 큐에 들어갈 수 있도록 처리합니다.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void resetQueuedNotificationsOnStartup() {
+        int resetCount = repo.updateStatusBulk(NotificationStatus.QUEUED, NotificationStatus.PENDING);
+        if (resetCount > 0) {
+            System.out.println("서버 구동 시 QUEUED 상태 메시지 " + resetCount + "건을 PENDING으로 복구했습니다.");
+        }
+    }
 
     // public BlockingQueue<NotiCommandRequest> getQueue(){return this.queue;} // 같은
     // 큐 쓰는지 확인위해 테스트하려고 잠시 만듬

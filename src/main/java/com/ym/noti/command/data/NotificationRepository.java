@@ -34,4 +34,11 @@ public interface NotificationRepository extends JpaRepository<NotificationReques
         @Modifying
         @Query("DELETE FROM NotificationRequest n WHERE n.createdAt < :threshold")
         void deleteOldNotifications(@Param("threshold") LocalDateTime threshold);
+
+        // 서버 재시작 시 QUEUED 상태인 알림을 PENDING 등으로 일괄 변경
+        @Transactional
+        @Modifying
+        @Query("UPDATE NotificationRequest n SET n.status = :newStatus WHERE n.status = :oldStatus")
+        int updateStatusBulk(@Param("oldStatus") NotificationStatus oldStatus,
+                        @Param("newStatus") NotificationStatus newStatus);
 }
