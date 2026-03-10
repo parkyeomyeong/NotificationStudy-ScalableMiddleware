@@ -16,10 +16,10 @@ import java.util.List;
 public interface NotificationRepository extends JpaRepository<NotificationRequest, Long> {
         List<NotificationRequest> findTop100ByStatusOrderByCreatedAtAsc(NotificationStatus status);
 
-        // 커서기반 페이징 쿼리
-        List<NotificationRequest> findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc(
+        // 커서기반 페이징 쿼리 (id 기반 - 타임스탬프 충돌 없음)
+        List<NotificationRequest> findTop100ByStatusAndIdGreaterThanOrderByIdAsc(
                         NotificationStatus status,
-                        LocalDateTime createdAtCursor);
+                        Long lastProcessedId);
 
         // 3번 이하로 실패한 알람을 실패 순서대로 가져오기
         List<NotificationRequest> findTop100ByStatusOrderByLastTriedAtAsc(NotificationStatus status);

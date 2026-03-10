@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "notification_request", indexes = {
-        @Index(name = "idx_status_createdAt", columnList = "status, createdAt"), // 조회 + 정렬을 위해 복합 인덱스로 성능 올리기
+        @Index(name = "idx_status_id", columnList = "status, id"), // 커서 기반 페이징 (id 기반)
         @Index(name = "idx_status_reservedAt", columnList = "status, reservedAt"),
         @Index(name = "idx_receiver_createdAt", columnList = "receiver, createdAt") // 조회 API 최적화
 

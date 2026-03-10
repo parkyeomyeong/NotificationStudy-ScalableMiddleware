@@ -39,7 +39,7 @@ public class NotificationQueueFillerScheduler {
         this.repo = repo;
     }
 
-    private LocalDateTime cursor = LocalDateTime.now().minusYears(10); // 초기 커서 값
+    private Long lastProcessedId = 0L; // id 기반 커서 (타임스탬프 충돌 없음)
     private final AtomicBoolean isMainSchRunning = new AtomicBoolean(false);
     private final AtomicBoolean isReservedSchRunning = new AtomicBoolean(false);
     private final AtomicBoolean isFailedSchRunning = new AtomicBoolean(false);
@@ -75,13 +75,13 @@ public class NotificationQueueFillerScheduler {
             // queue에 남은 자리가 있을떄만 큐에 넣기
             if (mainQueue.remainingCapacity() > 0) {
                 // 대기상태의 메시지를 들어온 순서대로 100개 가져오기
-                List<NotificationRequest> candidates = repo.findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc(
+                List<NotificationRequest> candidates = repo.findTop100ByStatusAndIdGreaterThanOrderByIdAsc(
                         NotificationStatus.PENDING,
-                        cursor);
+                        lastProcessedId);
                 // 벌크 처리를 하면 데이터 정확성과 장애 대비가 어려워 건 by 건으로 데이터 update
                 for (NotificationRequest notiEntity : candidates) {
                     if (mainQueue.offer(notiEntity.getId())) {
-                        cursor = notiEntity.getCreatedAt(); // 커서 업데이트 (일단 큐에 들어가면 해당시간으로 커서 변경!!!!!!!!!!)
+                        lastProcessedId = notiEntity.getId(); // 커서 업데이트
                         notiEntity.setStatus(NotificationStatus.QUEUED);
                         repo.save(notiEntity);
                     } else
