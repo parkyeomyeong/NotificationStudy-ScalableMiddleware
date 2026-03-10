@@ -130,9 +130,9 @@ lastProcessedId = lastEnqueuedEntity.getId();
 repo.findTop100ByStatusAndIdGreaterThanOrderByIdAsc(PENDING, lastProcessedId);
 ```
 
-OFFSET 방식은 중간에 새 레코드가 삽입되면 skip/중복이 발생 가능. id 커서를 이용하면 이 문제를 회피할 수 있다.
+OFFSET 방식은 중간에 새 레코드가 삽입되면 skip/중복이 발생 가능. id 커서를 이용하면 이 문제를 회피할 수 있음
 `createdAt` 커서는 초당 수백 건의 요청이 몰릴 때 배치 경계에서 동일 타임스탬프가 발생할 수 있어
-`createdAt > cursor` 조건이 일부 건을 영구적으로 누락시킬 수 있다. id는 auto-increment PK라 항상 unique하므로 이 문제가 없다.
+`createdAt > cursor` 조건이 일부 건을 영구적으로 누락시킬 수 있다. id는 auto-increment PK라 항상 unique하므로 이 문제가 없음.
 
 ### 컨슈머 스레드 풀 크기 결정 전략
 
