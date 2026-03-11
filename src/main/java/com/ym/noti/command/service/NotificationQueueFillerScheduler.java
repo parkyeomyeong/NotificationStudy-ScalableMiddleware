@@ -122,7 +122,7 @@ public class NotificationQueueFillerScheduler {
     }
 
     // [3. 실패 알람 발송] DB -> Queue로 넣는 스케쥴러
-    @Scheduled(fixedDelay = 5_000)
+    @Scheduled(fixedDelay = 1_000)
     public void refillFailedQueue() {
         // 앞에서 이미 실행중 이라면 실행 안함
         if (!isFailedSchRunning.compareAndSet(false, true))
