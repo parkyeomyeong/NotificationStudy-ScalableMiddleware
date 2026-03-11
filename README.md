@@ -432,6 +432,7 @@ k6를 이용해 단계적으로 병목을 진단합니다.
 | Test 1 - Baseline | 단일 스레드 컨슈머의 한계 측정 | [README](k6/test1_baseline/README.md) |
 | Test 2 - Multi Thread | 스레드 풀 확장 후 처리량 개선 측정 | [README](k6/test2_multithread/README.md) |
 | Test 3 - Timeout | 외부 서버 지연 시 타임아웃 유무 효과 비교 | [README](k6/test3_timeout/README.md) |
+| Test 4 - Priority Worker Pool | 고정 스레드 배분 → 공유 우선순위 워커 풀 전환 효과 측정 | [README](k6/test4_priority_worker/README.md) |
 
 ---
 
