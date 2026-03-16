@@ -128,16 +128,15 @@ public class NotificationQueueConsumer {
      */
 
     // ==========================================================================================
-    // 진정한 실무(Enterprise) 레벨: 이벤트 기반(Blocking) 우선순위 워커 풀 패턴
+    // 4단계: 이벤트 기반(Blocking) 우선순위 워커 풀 패턴
     // ==========================================================================================
 
     // Mock 서버의 최대 동시 처리량(200)에 맞춘 워커 스레드
     private static final int MAX_WORKER_THREADS = 200;
 
     // 워커 200개 + 우선순위 대기열(버퍼) 100개 확보 (총 300개의 토큰)
-    // 버퍼(100)를 두는 이유: 버퍼 공간 안에서 '메인(1순위)' 알림이 '실패(3순위)' 알림을 역전(새치기)할 수 있게 만들기 위함!
-    // 배압(Backpressure) 기능: 300개가 꽉 차면 디스패처가 강제로 대기하게 되어, 원본 큐 메시지를 다 읽어버려 발생하는 OOM
-    // 방지.
+    // 버퍼(100)를 두는 이유: 버퍼 공간 안에서 '메인(1순위)' 알림이 '실패(3순위)' 알림을 역전할 수 있게 만들기 위함!
+    // Backpressure 기능: 300개가 꽉 차면 디스패처가 강제로 대기하게 되어, 원본 큐 메시지를 다 읽어버려 발생하는 OOM 방지.
     private final java.util.concurrent.Semaphore backpressureTokens = new java.util.concurrent.Semaphore(
             MAX_WORKER_THREADS + 100);
 
@@ -162,7 +161,7 @@ public class NotificationQueueConsumer {
         Thread dispatcher = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    // 1. (가장 중요) poll(100ms)이라는 대학생 꼼수 대신, 알림이 올 때까지 이벤트 기반 완벽 대기 (CPU 0%)
+                    // 1. (가장 중요) poll(100ms)이라는 꼼수 대신, 알림이 올 때까지 이벤트 기반 완벽 대기 (CPU 0%)
                     Long notiId = queue.take();
 
                     // 2. 워커 풀 + 버퍼가 300개를 초과했으면 자리가 날 때까지 여기서 스스로 대기
@@ -203,7 +202,7 @@ public class NotificationQueueConsumer {
             try {
                 processNotification(notiId, isFailedQueue);
             } finally {
-                // 작업이 끝나면 반드시 토큰을 1개 반납하여, 디스패처가 다음 메시지를 가져오도록 숨통을 틔워줌!
+                // 작업이 끝나면 반드시 토큰을 1개 반납하여, 디스패처가 다음 메시지를 가져오도록!
                 backpressureTokens.release();
             }
         }
@@ -211,7 +210,8 @@ public class NotificationQueueConsumer {
 
     @org.springframework.scheduling.annotation.Scheduled(fixedRate = 5000)
     public void logWorkerStats() {
-        if (workerPool == null) return;
+        if (workerPool == null)
+            return;
         java.util.concurrent.ThreadPoolExecutor tpe = (java.util.concurrent.ThreadPoolExecutor) workerPool;
         log.info("[WORKER STATS] active={}/{} | pendingTasks={} | tokens={}/300 | queues=[M:{} R:{} F:{}]",
                 tpe.getActiveCount(), MAX_WORKER_THREADS,

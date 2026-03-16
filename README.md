@@ -322,9 +322,8 @@ private final Semaphore backpressureTokens = new Semaphore(300);
 **③ Scale-out 시의 한계**
 스케줄러 중복 방지를 JVM 메모리 기반의 `AtomicBoolean`으로 처리했습니다. 서버가 2대 이상으로 스케일 아웃될 경우 여러 인스턴스가 동일한 DB 레코드를 동시에 가져가 중복 발송될 위험이 있습니다. 확장이 필요해지는 시점에는 외부 MQ(Kafka 등) 도입으로 아키텍처 전환이 필요할 것 같습니다.
 
-**④ ★★★ 세마포어 단계에서의 우선순위 미보장 (Starvation 가능성)**
-`PriorityBlockingQueue`는 워커 풀 '내부'에서만 우선순위를 정렬합니다. 세마포어 토큰 획득 단계에서는 Main과 Failed 디스패처가 동등하게 경쟁하므로, 극단적인 상황에서는 우선순위가 낮은 큐가 토큰을 선점하여 Main 큐 처리가 지연되는 Starvation 현상이 발생할 수 있습니다.
-
+**④ ★ Starvation 가능성**
+`PriorityBlockingQueue`내부에서 worker가 태스크를 꺼낼 때 항상 우선순위가 높은 태스크를 먼저 선택하므로, main 큐가 지속적으로 유입되는 극단적인 상황에서 failed 태스크가 PBQ 안에 계속 쌓이기만 하고 실행되지 못하는 Starvation이 발생할 수 있습니다.
 
 ---
 ## 10. 실행 방법
