@@ -1,3 +1,24 @@
+# ────────────────────────────────────────────────
+# 부하 테스트용: 이 값을 바꿔가며 스레드 수 vs 메모리/TPS 비교
+# 50 → 200 → 500 → 1000 으로 올려가며 측정
+# ────────────────────────────────────────────────
+noti:
+  worker:
+    threads: 200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, metrics, threaddump
+  endpoint:
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 spring:
   jpa:
 #    show-sql: true      # 콘솔에 SQL 출력

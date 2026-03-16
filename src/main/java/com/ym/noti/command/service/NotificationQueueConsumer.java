@@ -4,10 +4,10 @@ import com.ym.noti.command.data.NotificationRepository;
 import com.ym.noti.command.domain.NotificationRequest;
 import com.ym.noti.command.domain.NotificationStatus;
 import com.ym.noti.command.domain.SendResult;
-import com.ym.noti.command.dto.NotiCommandRequest;
+
 import com.ym.noti.command.router.NotiSenderRouter;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Executors;
 
 @Slf4j
 @Service
