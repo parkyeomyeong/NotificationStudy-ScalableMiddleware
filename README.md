@@ -42,6 +42,7 @@
 
 ### 시스템 아키텍쳐
 
+```mermaid
 flowchart LR
     Client([클라이언트]) -->|1. 발송 요청| API
 
@@ -89,9 +90,11 @@ flowchart LR
 
     %% 미들웨어 영역을 돋보이게 하는 스타일링 (파란색 굵은 점선 테두리)
     style Middleware fill:#f8f9fa,stroke:#0d6efd,stroke-width:3px,stroke-dasharray: 5 5
+```
 
 **핵심 원칙 설정**: API 수용 계층과 발송 계층을 분리합니다.
 API는 DB 저장만 하고 즉시 200을 반환하며, 실제 발송은 비동기 컨슈머가 독립적으로 처리합니다.
+
 
 ---
 
