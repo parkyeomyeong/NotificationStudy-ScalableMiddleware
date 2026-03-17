@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,144 +18,133 @@ class DebuggableSemaphore extends Semaphore {
     public DebuggableSemaphore(int permits, boolean fair) {
         super(permits, fair);
     }
-
-    // 내부 대기열 스레드 목록을 리스트로 반환 (순서대로)
-    public List<String> getWaitingThreadNames() {
-        List<String> names = new ArrayList<>();
-        // getQueuedThreads()는 뒤에서부터(최신순) 주므로 뒤집어서 반환
-        Collection<Thread> threads = super.getQueuedThreads();
-        for (Thread t : threads) {
-            names.add(t.getName());
-        }
-        Collections.reverse(names);
-        return names;
-    }
 }
 
 class QueueFairnessTest {
 
     static final int SEMAPHORE_PERMITS = 90;
     static final int ITEMS_PER_QUEUE = 2000;
-    static final int OBSERVE_COUNT = 100; // 측정할 순수 경합 건수
-    static final long CONSUMER_DELAY_MS = 0; // 토큰 반납 전 대기(안쓰는게 정확할듯)
+    static final int OBSERVE_COUNT = 100;
 
     @Test
-    @DisplayName("[테스트1-1] Non-fair: 세마포어 0 이후 새치기로 랜덤으로 큐에 들어가는지 테스트")
+    @DisplayName("[테스트1-1] Non-fair: 세마포어 0 이후 새치기 독점 현상 확인")
     void nonFair() throws Exception {
-        run(false, "Non-fair");
+        run(false, "Non-fair", false);
     }
 
     @Test
-    @DisplayName("[테스트1-2] Fair: 세마포어 0 이후 ex.M→R→F 균등하게 로테이션 되는지 테스트")
+    @DisplayName("[테스트1-2] Fair: 세마포어 0 이후 M,R,F 교차 진입 보장 확인")
     void fair() throws Exception {
-        run(true, "Fair");
+        run(true, "Fair", false);
     }
 
-    private void run(boolean fair, String label) throws Exception {
-        DebuggableSemaphore sem = new DebuggableSemaphore(SEMAPHORE_PERMITS, fair);
+    @Test
+    @DisplayName("[테스트1-3] Burst-Fair: N개의 알람이 동시 종료되어 대량의 세마포어가 풀릴 때의 분배 확인")
+    void burstFair() throws Exception {
+        // Burst 시나리오: 50개의 스레드가 동시에 작업을 끝내고 50개의 permit을 한 번에 반납함
+        run(true, "Burst-Fair", true);
+    }
+
+    private void run(boolean fair, String label, boolean isBurstTest) throws Exception {
+        // Burst 테스트는 시작부터 세마포어가 0개여서 디스패처들이 AQS 큐에 완벽히 정렬되도록 함
+        int initialPermits = isBurstTest ? 0 : SEMAPHORE_PERMITS;
+        DebuggableSemaphore sem = new DebuggableSemaphore(initialPermits, fair);
 
         BlockingQueue<Long> mainQ = new LinkedBlockingQueue<>();
         BlockingQueue<Long> resQ = new LinkedBlockingQueue<>();
         BlockingQueue<Long> failQ = new LinkedBlockingQueue<>();
-        // 1. Main, reserved, fail 큐에 많은 양의 데이터를 채움
+
         for (long i = 1; i <= ITEMS_PER_QUEUE; i++) {
             mainQ.put(i);
             resQ.put(i + 10000);
             failQ.put(i + 20000);
         }
 
-        // 컨슈머가 사용할 PBQ 역할: 각 큐의디스패처가 acquire() 후 여기에 넣음
-        BlockingQueue<String> pbq = new LinkedBlockingQueue<>();
+        // 스레드 풀 병목에 의한 Exception을 막기 위해 넉넉한 Cached 풀 사용
+        ExecutorService workerPool = Executors.newCachedThreadPool();
+
         List<String> contentionLog = new CopyOnWriteArrayList<>();
-        CountDownLatch testFinished = new CountDownLatch(1); // 테스트 종료 신호
+        CountDownLatch testFinished = new CountDownLatch(1);
 
-        AtomicBoolean isSaturated = new AtomicBoolean(false); // 세마포어 0 도달 여부
-        AtomicBoolean recordingStarted = new AtomicBoolean(false); // 드레인 완료 여부
+        // ★ 핵심: 초기 90번의 acquire()가 모두 끝날 때까지 workerPool의 작업 처리를 일시 정지
+        // 이렇게 해야 세마포어가 0이 되어 디스패처 3개가 완벽하게 AQS 큐에 줄을 서게 됩니다.
+        CountDownLatch initialAcquireBarrier = new CountDownLatch(isBurstTest ? 0 : SEMAPHORE_PERMITS);
 
-        // 1. 디스패처 시작: 프로덕션과 동일한 구조로
-        Thread d1 = startDispatcher(mainQ, "M", sem, pbq);
-        Thread d2 = startDispatcher(resQ, "R", sem, pbq);
-        Thread d3 = startDispatcher(failQ, "F", sem, pbq);
+        // 디스패처 시작
+        Thread d1 = startDispatcher(mainQ, "M", sem, workerPool, contentionLog, testFinished, initialAcquireBarrier,
+                isBurstTest);
+        Thread d2 = startDispatcher(resQ, "R", sem, workerPool, contentionLog, testFinished, initialAcquireBarrier,
+                isBurstTest);
+        Thread d3 = startDispatcher(failQ, "F", sem, workerPool, contentionLog, testFinished, initialAcquireBarrier,
+                isBurstTest);
 
-        // 2. 소비자: 드레인 로직 포함
-        Thread consumer = new Thread(() -> {
-            int drainCount = 0;
-            int targetDrainCount = 0; // 세마포어 소진 시점에 동적으로 캡처할 드레인 목표치
+        if (isBurstTest) {
+            // 디스패처 3개가 모두 확실하게 AQS 세마포어 대기열에 진입하도록 잠시 대기
+            Thread.sleep(500);
+            System.out.println("\n  >>> 워커 50개가 동시에 완료되어 세마포어 50개가 동시 반납됨! (Burst Release) <<<");
+            sem.release(50); // 50개 동시 반납!
+        }
 
-            try {
-                while (!Thread.currentThread().isInterrupted()) {
-                    String dispatched = pbq.take();
+        boolean completed = testFinished.await(10, TimeUnit.SECONDS);
 
-                    // 세마포어가 0이 되는 '정확한 찰나'에 큐에 남은 과거의 유산 개수를 캡처
-                    if (!isSaturated.get() && sem.availablePermits() == 0) {
-                        isSaturated.set(true);
-                        // 고정값(90)이 아닌, 현재 pbq에 들어있는 실제 개수를 기준값으로 설정!
-                        targetDrainCount = pbq.size();
-                        System.out.println("\n[" + label + "] 세마포어 소진! 초기 버퍼(" + targetDrainCount + "개) 드레인 시작...");
-                    }
-
-                    // 드레인 이후 세마포어 반납 직전 대기열 확인
-                    if (recordingStarted.get()) {
-                        List<String> waiters = sem.getWaitingThreadNames();
-                        System.out.println("현재 Release 직전 대기열: " + waiters);
-                    }
-                    sem.release();
-
-                    // 드레인 진행 구간
-                    if (isSaturated.get() && !recordingStarted.get()) {
-                        drainCount++;
-
-                        // 사용자님 지적대로, 고정값이 아닌 동적 캡처 사이즈(targetDrainCount)를 사용
-                        if (drainCount >= targetDrainCount) {
-                            recordingStarted.set(true);
-                            System.out.println("[" + label + "] 드레인 완료 (" + drainCount + "개 비움). 지금부터 " + OBSERVE_COUNT
-                                    + "건 측정 시작!");
-                        }
-                    }
-                    // 실제 측정 구간
-                    else if (recordingStarted.get()) {
-                        contentionLog.add(dispatched);
-
-                        // System.out.printf("[%s] 경합[%3d] %s-Dispatcher 획득 (대기열: %d명) [Queue size]
-                        // %d%n",
-                        // label, contentionLog.size(), dispatched, sem.getQueueLength(), pbq.size());
-
-                        if (contentionLog.size() >= OBSERVE_COUNT) {
-                            testFinished.countDown(); // 목표치 달성 시 즉시 종료
-                            break;
-                        }
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
-        consumer.setDaemon(true);
-        consumer.start();
-
-        // 3. 종료 대기 및 결과 출력
-        boolean completed = testFinished.await(30, TimeUnit.SECONDS);
-
-        // 스레드 중지
         d1.interrupt();
         d2.interrupt();
         d3.interrupt();
-        consumer.interrupt();
+        workerPool.shutdownNow();
 
         assertTrue(completed, label + ": 측정 목표치 미달성 (타임아웃)");
         printResults(label, contentionLog);
     }
 
-    // 프로덕션 startPriorityDispatcher와 동일 구조
-    // take() → acquire() → pbq.put() (프로덕션에서는 workerPool.execute(PrioritizedTask))
     private Thread startDispatcher(BlockingQueue<Long> queue, String label,
-            Semaphore sem, BlockingQueue<String> pbq) {
+            Semaphore sem, ExecutorService workerPool,
+            List<String> contentionLog, CountDownLatch testFinished,
+            CountDownLatch initialAcquireBarrier, boolean isBurstTest) {
         Thread t = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     queue.take();
                     sem.acquire();
-                    pbq.put(label);
+
+                    if (!isBurstTest) {
+                        initialAcquireBarrier.countDown();
+                    }
+
+                    // 풀 종료 중엔 추가 제출 안함
+                    if (workerPool.isShutdown()) {
+                        sem.release();
+                        break;
+                    }
+
+                    try {
+                        workerPool.execute(() -> {
+                            try {
+                                if (!isBurstTest) {
+                                    initialAcquireBarrier.await();
+                                }
+
+                                if (contentionLog.size() < OBSERVE_COUNT) {
+                                    contentionLog.add(label);
+                                    if (contentionLog.size() == OBSERVE_COUNT) {
+                                        testFinished.countDown();
+                                    }
+                                }
+
+                                if (!isBurstTest) {
+                                    Thread.sleep(10);
+                                }
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            } finally {
+                                sem.release(); // Burst든 아니든 무조건 반납해야 100건 측정이 계속됨
+                            }
+                        });
+                    } catch (RejectedExecutionException ree) {
+                        // 풀 셧다운 후에 들어온 작업은 무시하고 세마포어 반납
+                        sem.release();
+                        break;
+                    }
+
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -168,7 +156,7 @@ class QueueFairnessTest {
 
     private void printResults(String mode, List<String> log) {
         System.out.println("\n" + "=".repeat(70));
-        System.out.println("  [" + mode + "] 경합 구간 (세마포어 소진 후 " + OBSERVE_COUNT + "건)");
+        System.out.println("  [" + mode + "] 워커 처리 순서 기록 (총 " + OBSERVE_COUNT + "건)");
         System.out.println("=".repeat(70));
 
         System.out.print("  순서: ");
@@ -180,12 +168,12 @@ class QueueFairnessTest {
         System.out.println();
 
         int maxRun = calcMaxRunLength(log);
-        Map<String, Long> counts = log.stream()
-                .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
+        Map<String, Long> counts = log.stream().collect(Collectors.groupingBy(s -> s, Collectors.counting()));
 
-        System.out.println("\n  최대 연속 동일 큐: " + maxRun);
-        System.out.println("  큐별 건수: " + counts);
-        System.out.println("  → Fair이면 maxRun=1 (M,R,F 순환) / Non-fair이면 높음 (독점)");
+        System.out.println("\n  최대 연속 동일 큐(Max Run): " + maxRun);
+        System.out.println("  큐별 처리 건수: " + counts);
+        System.out.println("  → Fair 설정일 경우: 특정 큐의 독점 없이 M,R,F가 고르게 교대 (maxRun 낮음)");
+        System.out.println("  → Non-fair 설정일 경우: 특정 큐가 연속으로 독점하는 현상 발생 (maxRun 높음)");
         System.out.println("=".repeat(70));
     }
 
