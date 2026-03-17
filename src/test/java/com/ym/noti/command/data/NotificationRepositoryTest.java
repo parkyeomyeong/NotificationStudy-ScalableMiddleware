@@ -40,28 +40,9 @@ class NotificationRepositoryTest {
         assertThat(remaining).doesNotContain(old);
     }
 
-    @Test
-    void findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc() {
-        // given: createdAt이 다른 알림 3개 저장
-        LocalDateTime now = LocalDateTime.now();
-
-        for (int i = 0; i < 3; i++) {
-            NotificationRequest n = new NotificationRequest();
-            n.setStatus(NotificationStatus.PENDING);
-            n.setCreatedAt(now.minusMinutes(i));
-            n.setChannel("TEST");
-            n.setContent("Test Content");
-            n.setReceiver("Test Receiver");
-            repo.save(n);
-        }
-
-        // when: 정렬 쿼리 실행
-        List<NotificationRequest> result = repo.findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc(
-                NotificationStatus.PENDING, now.minusMinutes(3));
-
-        // then: createdAt 순으로 정렬됐는지 확인
-        assertThat(result).isSortedAccordingTo(Comparator.comparing(NotificationRequest::getCreatedAt));
-    }
+    // [DEPRECATED] 커서 기반(ID) 폴링으로 리팩토링 후 삭제된 메서드. 테스트 비활성화.
+    // @Test
+    // void findTop100ByStatusAndCreatedAtAfterOrderByCreatedAtAsc() { ... }
 
     @Test
     void findTop100ByStatusShouldReturnOrderedList() {

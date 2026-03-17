@@ -15,6 +15,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.PriorityBlockingQueue;
 
 @Slf4j
 @Service
@@ -136,19 +141,19 @@ public class NotificationQueueConsumer {
     // 워커 200개 + 우선순위 대기열(버퍼) 100개 확보 (총 300개의 토큰)
     // 버퍼(100)를 두는 이유: 버퍼 공간 안에서 '메인(1순위)' 알림이 '실패(3순위)' 알림을 역전할 수 있게 만들기 위함!
     // Backpressure 기능: 300개가 꽉 차면 디스패처가 강제로 대기하게 되어, 원본 큐 메시지를 다 읽어버려 발생하는 OOM 방지.
-    private final java.util.concurrent.Semaphore backpressureTokens = new java.util.concurrent.Semaphore(
-            MAX_WORKER_THREADS + 100);
+    // true 인자를 넣으면 FIFO를 보장하여 큐에 쌓인 순서대로 토큰을 발급 (공평성 확보)
+    private final Semaphore backpressureTokens = new Semaphore(MAX_WORKER_THREADS + 100, true);
 
     // 실제 API 통신을 담당할 우선순위 기반 워커 풀
-    private java.util.concurrent.ExecutorService workerPool;
+    private ExecutorService workerPool;
 
     @PostConstruct
     public void startEnterpriseConsumers() {
         // 1. 일반 큐가 아닌 PriorityBlockingQueue를 내부 작업 대기열로 사용하는 워커 풀 생성
-        this.workerPool = new java.util.concurrent.ThreadPoolExecutor(
+        this.workerPool = new ThreadPoolExecutor(
                 MAX_WORKER_THREADS, MAX_WORKER_THREADS,
-                0L, java.util.concurrent.TimeUnit.MILLISECONDS,
-                new java.util.concurrent.PriorityBlockingQueue<Runnable>());
+                0L, TimeUnit.MILLISECONDS,
+                new PriorityBlockingQueue<Runnable>());
 
         // 2. CPU를 전혀 쓰지 않는(take 블로킹) 매니저(디스패처) 스레드 3개만 별도로 기동
         startPriorityDispatcher(mainQueue, 1, false, "Main-Dispatcher");
